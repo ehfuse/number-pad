@@ -87,27 +87,84 @@ function clampValue(value: number, min: number, max: number): number {
     return Number.isFinite(max) ? Math.min(max, lowerBounded) : lowerBounded;
 }
 
-/** 표시 텍스트(부호+콤마 허용)에서 실제 숫자값을 뽑는다. 빈 값/"-" 단독은 0. */
+/** 소수부 최대 자리수(계산기 전용) — 그 이상은 더 입력해도 무시한다. */
+const CALCULATOR_MAX_DECIMALS = 8;
+
+/** 표시 텍스트(부호+콤마+소수점 허용)에서 정수부/소수부만 남긴 "부호+숫자+점" 원시 문자열을 뽑는다(콤마 제거). */
+function toRawCalcText(text: string): string {
+    const negative = text.trim().startsWith("-");
+    const bare = text.replace(/[^\d.]/g, "");
+    return negative ? "-" + bare : bare;
+}
+
+/** 표시 텍스트(부호+콤마+소수점 허용)에서 실제 숫자값을 뽑는다. 빈 값/"-"/"." 단독은 0. */
 function parseSignedNumber(text: string): number {
     const negative = text.trim().startsWith("-");
-    const digits = text.replace(/[^\d]/g, "");
-    if (digits === "") return 0;
-    const n = Math.min(CALCULATOR_MAX, Number(digits));
+    const bare = text.replace(/[^\d.]/g, "");
+    if (bare === "" || bare === ".") return 0;
+    const dotIndex = bare.indexOf(".");
+    // 두 번째 이후의 "."은 그냥 숫자처럼 무시(제거)한다 — 있을 수 없는 입력이지만 방어적으로.
+    const clean = dotIndex === -1 ? bare : bare.slice(0, dotIndex + 1) + bare.slice(dotIndex + 1).replace(/\./g, "");
+    const n = Math.min(CALCULATOR_MAX, Number(clean) || 0);
     return negative ? -n : n;
 }
 
-/** 직접입력 중 천단위 콤마 포맷(부호 허용) — 선행 "-"를 보존하고 숫자만 그룹핑한다. */
+/** 직접입력 중 천단위 콤마 포맷(부호+소수점 허용) — 정수부만 그룹핑하고 소수부는 입력한 그대로 보존한다. */
 function formatSignedDigits(raw: string): string {
     const negative = raw.trim().startsWith("-");
-    const digits = raw.replace(/[^\d]/g, "");
-    if (digits === "") return negative ? "-" : "";
-    const n = Math.min(CALCULATOR_MAX, Number(digits));
-    return (negative ? "-" : "") + formatNumber(n);
+    const bare = raw.replace(/[^\d.]/g, "");
+    if (bare === "") return negative ? "-" : "";
+    if (bare === ".") return (negative ? "-" : "") + ".";
+    const dotIndex = bare.indexOf(".");
+    const intRaw = dotIndex === -1 ? bare : bare.slice(0, dotIndex);
+    const decRaw = dotIndex === -1 ? undefined : bare.slice(dotIndex + 1).replace(/\./g, "").slice(0, CALCULATOR_MAX_DECIMALS);
+    const intGrouped = intRaw === "" ? "0" : Math.min(Number(intRaw), CALCULATOR_MAX).toLocaleString("en-US");
+    const decimalSuffix = decRaw !== undefined ? "." + decRaw : "";
+    return (negative ? "-" : "") + intGrouped + decimalSuffix;
 }
 
 /**
- * 숫자(0~9)·지우기(⌫)·전체삭제(C) 버튼으로 구성된 공용 숫자 키패드 — variant="numpad"(기본)
- * | "calculator"(사칙연산 + 표시부 + 물리 키보드까지 갖춘 독립 계산기).
+ * 계산기 전용 — 원시 텍스트(toRawCalcText 결과, 콤마 없이 부호+숫자+점)에 숫자 한 자리를 이어붙인다.
+ * startFresh 면 그 자리부터 새로 시작. 정수부 상한(CALCULATOR_MAX)·소수부 자리수 상한을 넘기면 더 붙지 않는다.
+ */
+function appendCalcDigit(raw: string, digit: number, startFresh: boolean): string {
+    if (startFresh) return String(digit);
+    const negative = raw.startsWith("-");
+    const bare = negative ? raw.slice(1) : raw;
+    const dotIndex = bare.indexOf(".");
+    if (dotIndex === -1) {
+        const nextInt = bare === "0" || bare === "" ? String(digit) : bare + String(digit);
+        if (Number(nextInt) > CALCULATOR_MAX) return raw; // 정수부 상한 — 더 안 붙는다.
+        return (negative ? "-" : "") + nextInt;
+    }
+    const decimals = bare.slice(dotIndex + 1);
+    if (decimals.length >= CALCULATOR_MAX_DECIMALS) return raw; // 소수부 자리수 상한.
+    return raw + String(digit);
+}
+
+/** 계산기 전용 — 원시 텍스트에 소수점을 추가한다. 이미 있으면 무시, startFresh 면 "0." 부터 새로 시작. */
+function appendCalcDecimalPoint(raw: string, startFresh: boolean): string {
+    if (startFresh) return "0.";
+    if (raw.includes(".")) return raw;
+    return (raw === "" || raw === "-" ? raw + "0" : raw) + ".";
+}
+
+/** 계산기 전용 — 원시 텍스트에서 마지막 한 글자를 지운다(소수점·부호 포함). 다 지워지면 "0". */
+function removeCalcLastChar(raw: string, startFresh: boolean): string {
+    if (startFresh) return "0";
+    const next = raw.slice(0, -1);
+    return next === "" || next === "-" ? "0" : next;
+}
+
+/** 계산기 전용 — 원시 텍스트의 부호를 뒤집는다(0은 그대로 0). */
+function toggleCalcSign(raw: string): string {
+    if (raw === "0" || raw === "") return raw;
+    return raw.startsWith("-") ? raw.slice(1) : "-" + raw;
+}
+
+/**
+ * 숫자(0~9)·지우기(⌫)·전체삭제(C) 버튼으로 구성된 공용 숫자 키패드 — variant="numpad"(기본, 정수 전용)
+ * | "calculator"(사칙연산·소수점·부호 반전 + 표시부 + 물리 키보드까지 갖춘 독립 계산기).
  */
 export function NumberKeypad({
     variant = "numpad",
@@ -255,9 +312,27 @@ function CalculatorKeypad({
     // 상단 보조 표시줄 — "12,345 +" 처럼 누적값과 대기 연산자를 보여준다.
     const expressionText = accumulator !== null && pendingOp ? `${formatNumber(accumulator)} ${pendingOp}` : " ";
 
-    /** 숫자 키패드 입력(디지트/C/⌫) — 항상 새 입력 모드를 해제한다. */
-    const handleKeypadChange = (next: number) => {
-        setDisplayText(formatNumber(next));
+    /** 숫자 키패드 자릿수 입력. */
+    const handleCalcDigit = (digit: number) => {
+        setDisplayText(formatSignedDigits(appendCalcDigit(toRawCalcText(displayText), digit, startFresh)));
+        setStartFresh(false);
+    };
+
+    /** 소수점(.) 입력 — 이미 있으면 무시. */
+    const handleCalcDecimalPoint = () => {
+        setDisplayText(formatSignedDigits(appendCalcDecimalPoint(toRawCalcText(displayText), startFresh)));
+        setStartFresh(false);
+    };
+
+    /** 한 자리 지우기(⌫). */
+    const handleCalcBackspace = () => {
+        setDisplayText(formatSignedDigits(removeCalcLastChar(toRawCalcText(displayText), startFresh)));
+        setStartFresh(false);
+    };
+
+    /** 부호 반전(+/−) — 현재 표시값의 음수/양수를 뒤집는다. */
+    const handleCalcToggleSign = () => {
+        setDisplayText(formatSignedDigits(toggleCalcSign(toRawCalcText(displayText))));
         setStartFresh(false);
     };
 
@@ -267,9 +342,14 @@ function CalculatorKeypad({
         setStartFresh(false);
     };
 
-    /** 표시부 blur 시 빈 값/부호만 남은 상태를 0으로 정리한다. */
+    /** 표시부 blur 시 빈 값/부호만 남은 상태는 0으로, 소수점만 매달린 상태("12.")는 소수점을 떼고 정리한다. */
     const handleDisplayInputBlur = () => {
-        if (displayText.trim() === "" || displayText.trim() === "-") setDisplayText("0");
+        const trimmed = displayText.trim();
+        if (trimmed === "" || trimmed === "-" || trimmed === "." || trimmed === "-.") {
+            setDisplayText("0");
+        } else if (trimmed.endsWith(".")) {
+            setDisplayText(trimmed.slice(0, -1));
+        }
     };
 
     /** 현재값을 클립보드에 복사한다(원시 숫자, 콤마 없이). */
@@ -324,8 +404,8 @@ function CalculatorKeypad({
     /**
      * 물리 키보드 연결 — 이 컴포넌트 안(입력칸·버튼)에 포커스가 있을 때만 동작한다(다른 화면 입력칸과 충돌 없음).
      * 연산자(+ − × ÷)·Enter(=)·Escape(AC)는 입력칸 포커스 여부와 무관하게 항상 계산기 동작으로 가로챈다.
-     * 숫자/백스페이스는 입력칸에 포커스가 있으면 기본적으로 네이티브 타이핑(직접 편집)에 맡기되, startFresh(연산자
-     * 직후라 다음 입력이 새로 시작해야 하는 상태)일 때만 키패드를 누른 것처럼 state 기반 로직(appendDigit/removeLastDigit)으로
+     * 숫자/소수점/백스페이스는 입력칸에 포커스가 있으면 기본적으로 네이티브 타이핑(직접 편집)에 맡기되, startFresh(연산자
+     * 직후라 다음 입력이 새로 시작해야 하는 상태)일 때만 키패드를 누른 것처럼 state 기반 로직(appendCalcDigit 등)으로
      * 가로채 처리한다 — 선택(select) 같은 네이티브 트릭 없이 "123+123" 이 "123123" 으로 이어붙는 것을 막기 위함이다.
      * 각 분기에서 setPressedKey 로 대응하는 화면 버튼을 눌린 상태로 표시한다 — 마우스 클릭의 :active 효과와
      * 동일한 시각 피드백을 물리 키보드 입력에도 주기 위함이다(keyup 에서 handleKeyUp 이 해제한다).
@@ -337,15 +417,21 @@ function CalculatorKeypad({
             setPressedKey(event.key); // 네이티브 타이핑으로 넘기는 경우(아래 return)에도 눌림 효과는 항상 켠다.
             if (isDisplayInput && !startFresh) return;
             event.preventDefault();
-            const digit = Number(event.key);
-            handleKeypadChange(appendDigit(startFresh ? 0 : displayNumber, digit, 0, CALCULATOR_MAX));
+            handleCalcDigit(Number(event.key));
+            return;
+        }
+        if (event.key === ".") {
+            setPressedKey(".");
+            if (isDisplayInput && !startFresh) return;
+            event.preventDefault();
+            handleCalcDecimalPoint();
             return;
         }
         if (event.key === "Backspace") {
             setPressedKey("backspace");
             if (isDisplayInput && !startFresh) return;
             event.preventDefault();
-            handleKeypadChange(removeLastDigit(startFresh ? 0 : displayNumber, 0, CALCULATOR_MAX));
+            handleCalcBackspace();
             return;
         }
         const op = OPERATOR_KEY_MAP[event.key];
@@ -396,7 +482,7 @@ function CalculatorKeypad({
         ...digitButtonSx,
         fontSize: typeof fontSize === "number" ? fontSize * 0.75 : `calc(${fontSize} * 0.75)`,
     };
-    /** 연산자 4개 — 숫자 키패드 각 행(7·8·9 / 4·5·6 / 1·2·3 / C·0·⌫)과 같은 줄에 하나씩 나란히 놓인다. */
+    /** 연산자 4개 — 숫자 키패드 각 행(7·8·9 / 4·5·6 / 1·2·3 / +/-·0·.)과 같은 줄에 하나씩 나란히 놓인다. */
     const OPERATORS: CalcOperator[] = ["÷", "×", "−", "+"];
 
     return (
@@ -406,11 +492,36 @@ function CalculatorKeypad({
             onKeyUp={handleKeyUp}
             onBlur={handleKeyUp}
         >
-            {/* 표시부 — 누적식(상단, 작게) + 현재값(직접 입력 가능, 하단, 크게) + 복사 아이콘. */}
+            {/* 표시부 — 누적식(상단, 작게) + 현재값(직접 입력 가능, 하단, 크게) + C(전체삭제)·⌫(한 자리 지우기)·복사 아이콘.
+                윈도우 계산기처럼 C/⌫ 를 숫자 키패드 밖(표시부 쪽)에 둔다. */}
             <Box sx={{ px: 1 }}>
-                <Typography sx={{ fontSize: 14, color: "text.secondary", minHeight: 20, textAlign: "right" }}>
-                    {expressionText}
-                </Typography>
+                <Box sx={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+                    <Typography sx={{ fontSize: 14, color: "text.secondary", minHeight: 20, textAlign: "right" }}>
+                        {expressionText}
+                    </Typography>
+                    <Box sx={{ display: "flex", gap: 0.5 }}>
+                        <Tooltip title="전체 삭제" disableInteractive>
+                            <IconButton
+                                size="small"
+                                onClick={handleAllClear}
+                                sx={pressedSx("C")}
+                                aria-label="전체 삭제"
+                            >
+                                <Typography sx={{ fontSize: 13, fontWeight: 700 }}>C</Typography>
+                            </IconButton>
+                        </Tooltip>
+                        <Tooltip title="한 자리 지우기" disableInteractive>
+                            <IconButton
+                                size="small"
+                                onClick={handleCalcBackspace}
+                                sx={pressedSx("backspace")}
+                                aria-label="한 자리 지우기"
+                            >
+                                <BackspaceOutlinedIcon sx={{ fontSize: 18 }} />
+                            </IconButton>
+                        </Tooltip>
+                    </Box>
+                </Box>
                 <Box sx={{ display: "flex", alignItems: "center", gap: 0.5 }}>
                     <Box
                         component="input"
@@ -441,7 +552,7 @@ function CalculatorKeypad({
                 </Box>
             </Box>
 
-            {/* 키패드(숫자·C·⌫, 7·8·9 가 위 — 표준 계산기 순서) + 연산자(÷ × − +) 를 한 그리드에 배치해 버튼 너비를 통일한다.
+            {/* 키패드(숫자·+/-·.,  7·8·9 가 위 — 표준 계산기 순서) + 연산자(÷ × − +) 를 한 그리드에 배치해 버튼 너비를 통일한다.
                 각 행 높이는 buttonHeight prop 으로 조정한다. */}
             <Box
                 sx={{
@@ -457,7 +568,7 @@ function CalculatorKeypad({
                             <Button
                                 key={digit}
                                 variant="outlined"
-                                onClick={() => handleKeypadChange(appendDigit(startFresh ? 0 : displayNumber, digit, 0, CALCULATOR_MAX))}
+                                onClick={() => handleCalcDigit(digit)}
                                 sx={{ ...digitButtonSx, ...pressedSx(String(digit)) }}
                             >
                                 {digit}
@@ -473,25 +584,26 @@ function CalculatorKeypad({
                         </Button>
                     </Fragment>
                 ))}
-                {/* 마지막 줄: C(전체삭제) · 0 · ⌫(한 자리 지우기) · + */}
-                <Button variant="outlined" color="inherit" onClick={handleAllClear} sx={{ ...digitButtonSx, ...pressedSx("C") }}>
-                    C
-                </Button>
+                {/* 마지막 줄: +/-(부호 반전) · 0 · .(소수점) · + — 윈도우 계산기와 동일한 배치. */}
                 <Button
                     variant="outlined"
-                    onClick={() => handleKeypadChange(appendDigit(startFresh ? 0 : displayNumber, 0, 0, CALCULATOR_MAX))}
-                    sx={{ ...digitButtonSx, ...pressedSx("0") }}
+                    color="inherit"
+                    onClick={handleCalcToggleSign}
+                    sx={{ ...digitButtonSx, ...pressedSx("+/-") }}
+                    aria-label="부호 반전"
                 >
+                    +/−
+                </Button>
+                <Button variant="outlined" onClick={() => handleCalcDigit(0)} sx={{ ...digitButtonSx, ...pressedSx("0") }}>
                     0
                 </Button>
                 <Button
                     variant="outlined"
-                    color="inherit"
-                    onClick={() => handleKeypadChange(removeLastDigit(startFresh ? 0 : displayNumber, 0, CALCULATOR_MAX))}
-                    sx={{ ...digitButtonSx, ...pressedSx("backspace") }}
-                    aria-label="한 자리 지우기"
+                    onClick={handleCalcDecimalPoint}
+                    sx={{ ...digitButtonSx, ...pressedSx(".") }}
+                    aria-label="소수점"
                 >
-                    <BackspaceOutlinedIcon sx={{ fontSize: 32 }} />
+                    .
                 </Button>
                 <Button
                     variant="outlined"

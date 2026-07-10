@@ -7,17 +7,22 @@
 /** 사칙연산 기호(계산기 버튼 표기 기준). */
 export type CalcOperator = "+" | "−" | "×" | "÷";
 
-/** 두 피연산자를 연산자로 계산한다(정수 반올림, 0으로 나누면 null). */
+/** 부동소수점 연산 오차(예: 0.1+0.2=0.30000000000000004)를 없앤다 — 정수 반올림이 아니라 소수 8자리로만 정리. */
+function roundCalc(value: number): number {
+    return Math.round(value * 1e8) / 1e8;
+}
+
+/** 두 피연산자를 연산자로 계산한다(소수부 유지, 0으로 나누면 null). */
 export function computeOperator(a: number, op: CalcOperator, b: number): number | null {
     switch (op) {
         case "+":
-            return a + b;
+            return roundCalc(a + b);
         case "−":
-            return a - b;
+            return roundCalc(a - b);
         case "×":
-            return a * b;
+            return roundCalc(a * b);
         case "÷":
-            return b === 0 ? null : Math.round(a / b);
+            return b === 0 ? null : roundCalc(a / b);
     }
 }
 
@@ -79,13 +84,13 @@ function stripLeadingNonMinusOperator(text: string): string {
 }
 
 /**
- * 식을 타이핑하는 중(계산 확정 전) 허용 문자만 남기고(숫자·콤마·부호·연산자), 연산자를 연달아 눌러도
+ * 식을 타이핑하는 중(계산 확정 전) 허용 문자만 남기고(숫자·콤마·소수점·부호·연산자), 연산자를 연달아 눌러도
  * 마지막 것만 남도록 정리하며(예: "11++++123+++++" → "11+123+"), 맨 앞에 "-" 외의 연산자가 오는 것도
  * 막는다(예: "+123" → "123"). 연산자를 완전히 지우지 않고 그대로 보여줄 때 쓴다 — 외부 입력칸(예: 금액
  * 입력란)의 onChange 에 바로 적용하면 된다.
  */
 export function formatExpressionInput(text: string): string {
-    const collapsed = collapseRuns(text.replace(/[^\d,+\-×÷*xX/]/g, ""), "+\\-×÷*xX/");
+    const collapsed = collapseRuns(text.replace(/[^\d,.+\-×÷*xX/]/g, ""), "+\\-×÷*xX/");
     return stripLeadingNonMinusOperator(collapsed);
 }
 

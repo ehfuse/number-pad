@@ -26,6 +26,9 @@ import { NumberKeypad } from "@ehfuse/number-pad";
 <NumberKeypad variant="calculator" liveInput={mirroredText} />;
 ```
 
+윈도우 계산기와 동일하게 소수점(`.`)·부호 반전(`+/-`)을 지원한다(소수부 최대 8자리). `C`/`⌫`는 숫자 키패드
+밖(표시부 옆)에 있다 — 물리 키보드에서도 숫자·`.`·Backspace·연산자·Enter(=)·Escape(AC)가 모두 동작한다.
+
 ### liveInput — 외부 입력칸과 연동
 
 `liveInput`은 외부(예: 금액 입력칸)에서 타이핑 중인 텍스트를 계산기 표시부에 그대로 미러링한다. `"11+55+66+"`처럼
