@@ -5,5 +5,6 @@ export {
     evaluateExpression,
     hasOperator,
     formatExpressionInput,
+    parseExpressionState,
 } from "./calculatorExpression";
-export type { CalcOperator } from "./calculatorExpression";
+export type { CalcOperator, ExpressionState } from "./calculatorExpression";

@@ -4,7 +4,7 @@ import BackspaceOutlinedIcon from "@mui/icons-material/BackspaceOutlined";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
 import { ErrorAlert, SuccessAlert } from "@ehfuse/alerts";
 import { formatNumber } from "./utils/numberFormat";
-import { computeOperator, type CalcOperator } from "./calculatorExpression";
+import { computeOperator, hasOperator, parseExpressionState, type CalcOperator } from "./calculatorExpression";
 
 /** 계산기(calculator variant) 입력/연산 상한(정수 범위). */
 const CALCULATOR_MAX = 999_999_999_999;
@@ -231,13 +231,24 @@ function CalculatorKeypad({
     const [pressedKey, setPressedKey] = useState<string | null>(null); // 물리 키보드로 누른 키에 대응하는 버튼 식별자(눌림 효과용).
     const displayNumber = parseSignedNumber(displayText); // 계산에 쓰는 실제 숫자값.
 
-    // 외부 미러 입력(liveInput) 이 바뀔 때마다 표시부를 그대로 따라가고, 진행 중이던 계산은 초기화한다.
+    // 외부 미러 입력(liveInput) 이 바뀔 때마다 표시부를 그대로 따라간다. "11+55+66+" 처럼 연산자가 섞인 식이면
+    // parseExpressionState 로 실제 타이핑한 것과 동일하게 누적값/대기 연산자로 접어서, 키패드로 직접 입력했을 때와
+    // 동일하게(예: 상단에 "121 +") 보이도록 한다 — 그냥 원문을 그대로 박아두면 연산자가 텍스트로 계속 남아있게 된다.
     useEffect(() => {
         if (liveInput === undefined) return; // prop 미지정 시(독립형 사용) 동기화하지 않는다.
-        setDisplayText(liveInput === "" ? "0" : liveInput);
-        setAccumulator(null);
-        setPendingOp(null);
-        setStartFresh(false); // 직접 타이핑한 것과 동일하게 취급 — 이어서 키패드를 누르면 뒤에 자리수가 붙는다.
+        if (liveInput === "" || !hasOperator(liveInput)) {
+            // 연산자 없는 순수 숫자 입력 — 기존과 동일하게 원문 그대로 미러링.
+            setDisplayText(liveInput === "" ? "0" : liveInput);
+            setAccumulator(null);
+            setPendingOp(null);
+            setStartFresh(false); // 직접 타이핑한 것과 동일하게 취급 — 이어서 키패드를 누르면 뒤에 자리수가 붙는다.
+            return;
+        }
+        const { accumulator: acc, pendingOp: op, currentText } = parseExpressionState(liveInput);
+        setDisplayText(currentText === "" ? formatNumber(acc ?? 0) : formatSignedDigits(currentText));
+        setAccumulator(acc);
+        setPendingOp(op);
+        setStartFresh(currentText === ""); // 연산자로 막 끊긴 직후면 다음 입력이 새로 시작(true), 피연산자 타이핑 중이면 false.
         // eslint-disable-next-line react-hooks/exhaustive-deps
     }, [liveInput]);
 

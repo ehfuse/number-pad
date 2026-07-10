@@ -26,6 +26,29 @@ import { NumberKeypad } from "@ehfuse/number-pad";
 <NumberKeypad variant="calculator" liveInput={mirroredText} />;
 ```
 
+### liveInput — 외부 입력칸과 연동
+
+`liveInput`은 외부(예: 금액 입력칸)에서 타이핑 중인 텍스트를 계산기 표시부에 그대로 미러링한다. `"11+55+66+"`처럼
+연산자가 섞인 식을 넘기면 실제로 그 순서대로 타이핑한 것처럼 누적값/대기 연산자로 계산해 보여준다(연산자를
+연달아 입력해도 마지막 것만 유효). 미러링은 외부 → 계산기 단방향이라, 그 입력칸 자체를 정리하거나 Enter로
+확정 계산하는 건 소비 측(그 입력칸) 책임이다 — `formatExpressionInput`으로 타이핑 중 필터링하고,
+`evaluateExpression`으로 확정 시점(Enter/blur)에 계산한다.
+
+```tsx
+import { NumberKeypad, formatExpressionInput, evaluateExpression } from "@ehfuse/number-pad";
+
+<TextField
+    value={amountText}
+    onChange={(e) => setAmountText(formatExpressionInput(e.target.value))}
+    onKeyDown={(e) => {
+        if (e.key !== "Enter") return;
+        const result = evaluateExpression(amountText);
+        if (result !== null) setAmountText(String(result));
+    }}
+/>
+<NumberKeypad variant="calculator" liveInput={amountText} />;
+```
+
 ### 크기 조정
 
 `buttonHeight`(px)·`fontSize`는 두 variant 모두에 적용된다. `px`/`py`는 컨테이너 좌우/상하 패딩(MUI spacing 단위 — 기본값은 numpad 0, calculator 2).
@@ -38,7 +61,7 @@ import { NumberKeypad } from "@ehfuse/number-pad";
 ## Exports
 
 -   `NumberKeypad`, `NumberKeypadProps`
--   `computeOperator`, `evaluateExpression`, `hasOperator`, `formatExpressionInput`, `CalcOperator`
+-   `computeOperator`, `evaluateExpression`, `hasOperator`, `formatExpressionInput`, `parseExpressionState`, `CalcOperator`, `ExpressionState`
 
 ## Peer Dependencies
 

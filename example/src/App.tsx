@@ -12,7 +12,7 @@ import {
     ToggleButton,
     ToggleButtonGroup,
 } from "@mui/material";
-import { NumberKeypad } from "@/index";
+import { NumberKeypad, formatExpressionInput, evaluateExpression } from "@/index";
 
 function NumpadDemo() {
     const [value, setValue] = useState(0);
@@ -126,13 +126,21 @@ function CalculatorDemo() {
 
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 240 }}>
                 <Typography variant="body2" color="text.secondary">
-                    이 입력칸에 타이핑하면 계산기 표시부에 그대로 미러링됩니다(liveInput).
+                    이 입력칸에 타이핑하면 계산기 표시부에 그대로 미러링됩니다(liveInput). 실제 금액 입력란처럼
+                    formatExpressionInput 으로 정리한 값을 넘긴다(연산자 연달아 입력해도 마지막 것만 남음).
+                    계산기는 이 입력칸의 keydown 을 알 수 없으므로, Enter 로 확정 계산하는 건 이 입력칸(소비 측)
+                    책임이다 — evaluateExpression 으로 직접 계산해 값을 되돌려 넣는다.
                 </Typography>
                 <TextField
                     label="liveInput"
                     size="small"
                     value={liveInput}
-                    onChange={(e) => setLiveInput(e.target.value)}
+                    onChange={(e) => setLiveInput(formatExpressionInput(e.target.value))}
+                    onKeyDown={(e) => {
+                        if (e.key !== "Enter") return;
+                        const result = evaluateExpression(liveInput);
+                        if (result !== null) setLiveInput(String(result));
+                    }}
                 />
                 <TextField
                     label="buttonHeight (px)"

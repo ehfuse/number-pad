@@ -60,7 +60,73 @@ export function hasOperator(text: string): boolean {
     return /[+\-×÷*xX/]/.test(body);
 }
 
-/** 식을 타이핑하는 중(계산 확정 전) 허용 문자만 남긴다(숫자·콤마·부호·연산자). 연산자를 지우지 않고 그대로 보여줄 때 쓴다. */
+/** 문자열에서 주어진 연산자 문자 집합이 2개 이상 연달아 오면 마지막 것만 남긴다(계속 눌러도 마지막 선택만 유효한 계산기 관례). */
+function collapseRuns(text: string, charClass: string): string {
+    return text.replace(new RegExp(`[${charClass}]{2,}`, "g"), (run) => run.slice(-1));
+}
+
+/** 정규화된 연산자(+ − × ÷)만 대상으로 연달아 온 것을 마지막 것만 남긴다 — 계산 엔진 내부(parseExpressionState)용. */
+function collapseOperatorRuns(text: string): string {
+    return collapseRuns(text, "+\\-×÷");
+}
+
+/**
+ * 식을 타이핑하는 중(계산 확정 전) 허용 문자만 남기고(숫자·콤마·부호·연산자), 연산자를 연달아 눌러도
+ * 마지막 것만 남도록 정리한다(예: "11++++123+++++" → "11+123+"). 연산자를 완전히 지우지 않고
+ * 그대로 보여줄 때 쓴다 — 외부 입력칸(예: 금액 입력란)의 onChange 에 바로 적용하면 된다.
+ */
 export function formatExpressionInput(text: string): string {
-    return text.replace(/[^\d,+\-×÷*xX/]/g, "");
+    return collapseRuns(text.replace(/[^\d,+\-×÷*xX/]/g, ""), "+\\-×÷*xX/");
+}
+
+/** {@link parseExpressionState} 의 반환값 — 계산기 표시 상태(누적값·대기 연산자·타이핑 중인 피연산자). */
+export interface ExpressionState {
+    /** 마지막으로 완결된 연산까지의 누적값. 연산자가 하나도 확정되지 않았으면 null. */
+    accumulator: number | null;
+    /** 다음에 적용될 연산자(마지막에 눌린/타이핑된 것). 없으면 null. */
+    pendingOp: CalcOperator | null;
+    /** 아직 연산자로 끊기지 않은, 현재 입력 중인 마지막 피연산자의 원본 텍스트. */
+    currentText: string;
+}
+
+/**
+ * "11+55+66+" 같은 식 문자열을 계산기 표시 상태로 분해한다 — 왼쪽부터 순서대로(우선순위 없이) 계산해
+ * 완결된 부분은 accumulator/pendingOp 로 접고, 아직 연산자로 끊기지 않은 마지막 피연산자는 currentText 로 남긴다.
+ * 연산자가 연달아 입력된 경우(collapseOperatorRuns) 마지막 것만 유효하게 처리한다.
+ * NumberKeypad 의 calculator variant 가 liveInput 을 실제로 타이핑한 것과 동일하게 미러링하는 데 쓴다.
+ */
+export function parseExpressionState(raw: string): ExpressionState {
+    const collapsed = collapseOperatorRuns(normalizeOperatorChars(raw.replace(/,/g, "").trim()));
+    if (!collapsed) return { accumulator: null, pendingOp: null, currentText: "" };
+    // 연산자 하나만 덜렁 있는 경우 — "-"는 음수 부호로 타이핑 시작한 상태로 보고, 그 외(+×÷)는 무의미하니 비운다.
+    if (collapsed === "-") return { accumulator: null, pendingOp: null, currentText: "-" };
+    if (/^[+×÷]$/.test(collapsed)) return { accumulator: null, pendingOp: null, currentText: "" };
+
+    const tokens = collapsed.split(/([+×÷]|(?<!^)-)/).filter((t) => t !== "");
+    if (tokens.length === 0) return { accumulator: null, pendingOp: null, currentText: "" };
+    if (tokens.length === 1) return { accumulator: null, pendingOp: null, currentText: tokens[0] };
+
+    // 토큰 개수가 짝수면 맨 끝이 연산자(다음 피연산자 타이핑 전) — 그 전까지 전부 계산해 누적한다.
+    const endsWithOperator = tokens.length % 2 === 0;
+    const currentText = endsWithOperator ? "" : tokens[tokens.length - 1];
+    const danglingTokens = endsWithOperator ? tokens : tokens.slice(0, -1);
+
+    let acc = Number(danglingTokens[0]);
+    if (!Number.isFinite(acc)) return { accumulator: null, pendingOp: null, currentText: collapsed };
+    let pendingOp: CalcOperator | null = null;
+    for (let i = 1; i < danglingTokens.length; i += 2) {
+        const op = danglingTokens[i] as CalcOperator;
+        const nextToken = danglingTokens[i + 1];
+        if (nextToken === undefined) {
+            pendingOp = op; // 마지막 연산자 — 다음 피연산자 대기 중.
+            break;
+        }
+        const next = Number(nextToken);
+        if (!Number.isFinite(next)) return { accumulator: acc, pendingOp: op, currentText };
+        const computed = computeOperator(acc, op, next);
+        if (computed === null) return { accumulator: acc, pendingOp: op, currentText }; // 0으로 나눔 — 그 지점까지만 반영.
+        acc = computed;
+        pendingOp = null;
+    }
+    return { accumulator: acc, pendingOp, currentText };
 }
