@@ -1,0 +1,36 @@
+# Source files
+src/
+tsconfig.json
+
+# Example folder (but not example/node_modules)
+example/
+
+# Development dependencies
+node_modules/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Git
+.git/
+.gitignore
+
+# Testing
+coverage/
+*.test.*
+*.spec.*
+
+# Build tools
+.cache/

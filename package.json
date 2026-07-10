@@ -1,0 +1,70 @@
+{
+    "name": "@ehfuse/number-pad",
+    "version": "0.1.0",
+    "type": "module",
+    "description": "React 숫자 키패드 + 사칙연산 계산기 컴포넌트 (MUI 기반)",
+    "publishConfig": {
+        "access": "restricted"
+    },
+    "author": "KIM YOUNG JIN <ehfuse@gmail.com>",
+    "license": "MIT",
+    "keywords": [
+        "react",
+        "mui",
+        "material-ui",
+        "keypad",
+        "numpad",
+        "calculator",
+        "component",
+        "typescript"
+    ],
+    "repository": {
+        "type": "git",
+        "url": "https://github.com/ehfuse/number-pad.git"
+    },
+    "main": "dist/index.js",
+    "module": "dist/index.esm.js",
+    "types": "dist/index.d.ts",
+    "files": [
+        "dist",
+        "README.md",
+        "LICENSE"
+    ],
+    "exports": {
+        ".": {
+            "types": "./dist/index.d.ts",
+            "import": "./dist/index.esm.js",
+            "require": "./dist/index.js"
+        }
+    },
+    "scripts": {
+        "build": "node build.js",
+        "dev": "node esbuild.config.js --watch",
+        "prepare": "npm run build",
+        "prepublishOnly": "npm run build"
+    },
+    "peerDependencies": {
+        "@ehfuse/alerts": ">=1.0.0",
+        "@emotion/react": ">=11.0.0",
+        "@emotion/styled": ">=11.0.0",
+        "@mui/icons-material": ">=5.0.0",
+        "@mui/material": ">=5.0.0",
+        "react": "^18.0.0 || ^19.0.0",
+        "react-dom": "^18.0.0 || ^19.0.0"
+    },
+    "devDependencies": {
+        "@ehfuse/alerts": "^1.1.2",
+        "@emotion/react": "^11.14.0",
+        "@emotion/styled": "^11.14.1",
+        "@mui/icons-material": "^7.3.4",
+        "@mui/material": "^7.3.7",
+        "@types/node": "^24.8.1",
+        "@types/react": "^19.0.0",
+        "@types/react-dom": "^19.0.0",
+        "esbuild": "^0.25.11",
+        "react": "^19.2.4",
+        "react-dom": "^19.2.4",
+        "tslib": "^2.8.1",
+        "typescript": "^5.9.3"
+    }
+}
