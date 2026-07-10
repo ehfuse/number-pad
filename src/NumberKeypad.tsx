@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { Fragment, useEffect, useState } from "react";
 import { Box, Button, IconButton, Tooltip, Typography, type SxProps, type Theme } from "@mui/material";
 import BackspaceOutlinedIcon from "@mui/icons-material/BackspaceOutlined";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -49,12 +49,16 @@ export interface NumberKeypadProps {
     max?: number;
     /** 전체 박스에 추가할 스타일. */
     sx?: SxProps<Theme>;
-    /** 버튼 높이(px, 기본 76, numpad 전용). fillHeight 가 true 면 무시된다. */
+    /** 버튼 높이(px, 기본 76). numpad 는 fillHeight 가 true 면 무시된다. */
     buttonHeight?: number;
-    /** 숫자 폰트 크기(기본 "2rem", numpad 전용). */
+    /** 숫자 폰트 크기(기본 "2rem"). calculator 의 연산자 폰트는 이 값의 0.75배로 따라간다. */
     fontSize?: number | string;
     /** true 면 키패드가 부모 높이를 가득 채우도록 4행을 균등 분배한다(numpad 전용). */
     fillHeight?: boolean;
+    /** 컨테이너 좌우 패딩(MUI spacing 단위). 기본값은 numpad 0, calculator 2. */
+    px?: number | string;
+    /** 컨테이너 상하 패딩(MUI spacing 단위). 기본값은 numpad 0, calculator 2. */
+    py?: number | string;
     /**
      * calculator 전용 — 외부(예: 금액 입력칸)에서 타이핑 중인 텍스트를 표시부에 미러링한다.
      * 값이 바뀔 때마다 표시부를 그 텍스트로 덮어쓰고 진행 중이던 연산(누적값/연산자)은 초기화한다.
@@ -117,9 +121,21 @@ export function NumberKeypad({
     fontSize = "2rem",
     fillHeight = false,
     liveInput,
+    px,
+    py,
 }: NumberKeypadProps) {
     if (variant === "calculator") {
-        return <CalculatorKeypad sx={sx} liveInput={liveInput} digitOrder={digitOrder ?? "descending"} />;
+        return (
+            <CalculatorKeypad
+                sx={sx}
+                liveInput={liveInput}
+                digitOrder={digitOrder ?? "descending"}
+                buttonHeight={buttonHeight}
+                fontSize={fontSize}
+                px={px ?? 2}
+                py={py ?? 2}
+            />
+        );
     }
     const order = digitOrder ?? "ascending";
 
@@ -146,6 +162,8 @@ export function NumberKeypad({
                 gridTemplateColumns: "repeat(3, 1fr)",
                 ...(fillHeight ? { gridTemplateRows: "repeat(4, 1fr)", height: "100%" } : {}),
                 gap: 2,
+                px: px ?? 0,
+                py: py ?? 0,
                 ...sx,
             }}
         >
@@ -193,15 +211,24 @@ function CalculatorKeypad({
     sx,
     liveInput,
     digitOrder = "descending",
+    buttonHeight = 76,
+    fontSize = "2rem",
+    px = 2,
+    py = 2,
 }: {
     sx?: SxProps<Theme>;
     liveInput?: string;
     digitOrder?: "ascending" | "descending";
+    buttonHeight?: number;
+    fontSize?: number | string;
+    px?: number | string;
+    py?: number | string;
 }) {
     const [displayText, setDisplayText] = useState("0"); // 현재 입력/결과값의 표시 텍스트(단일 소스).
     const [accumulator, setAccumulator] = useState<number | null>(null); // 진행 중인 누적값.
     const [pendingOp, setPendingOp] = useState<CalcOperator | null>(null); // 대기 중인 연산자.
     const [startFresh, setStartFresh] = useState(true); // true 면 다음 입력이 0부터 새로 시작.
+    const [pressedKey, setPressedKey] = useState<string | null>(null); // 물리 키보드로 누른 키에 대응하는 버튼 식별자(눌림 효과용).
     const displayNumber = parseSignedNumber(displayText); // 계산에 쓰는 실제 숫자값.
 
     // 외부 미러 입력(liveInput) 이 바뀔 때마다 표시부를 그대로 따라가고, 진행 중이던 계산은 초기화한다.
@@ -289,11 +316,14 @@ function CalculatorKeypad({
      * 숫자/백스페이스는 입력칸에 포커스가 있으면 기본적으로 네이티브 타이핑(직접 편집)에 맡기되, startFresh(연산자
      * 직후라 다음 입력이 새로 시작해야 하는 상태)일 때만 키패드를 누른 것처럼 state 기반 로직(appendDigit/removeLastDigit)으로
      * 가로채 처리한다 — 선택(select) 같은 네이티브 트릭 없이 "123+123" 이 "123123" 으로 이어붙는 것을 막기 위함이다.
+     * 각 분기에서 setPressedKey 로 대응하는 화면 버튼을 눌린 상태로 표시한다 — 마우스 클릭의 :active 효과와
+     * 동일한 시각 피드백을 물리 키보드 입력에도 주기 위함이다(keyup 에서 handleKeyUp 이 해제한다).
      */
     const handleKeyDown = (event: React.KeyboardEvent<HTMLDivElement>) => {
         const isDisplayInput = (event.target as HTMLElement).tagName === "INPUT";
 
         if (event.key >= "0" && event.key <= "9") {
+            setPressedKey(event.key); // 네이티브 타이핑으로 넘기는 경우(아래 return)에도 눌림 효과는 항상 켠다.
             if (isDisplayInput && !startFresh) return;
             event.preventDefault();
             const digit = Number(event.key);
@@ -301,6 +331,7 @@ function CalculatorKeypad({
             return;
         }
         if (event.key === "Backspace") {
+            setPressedKey("backspace");
             if (isDisplayInput && !startFresh) return;
             event.preventDefault();
             handleKeypadChange(removeLastDigit(startFresh ? 0 : displayNumber, 0, CALCULATOR_MAX));
@@ -308,37 +339,62 @@ function CalculatorKeypad({
         }
         const op = OPERATOR_KEY_MAP[event.key];
         if (op) {
-            // 입력칸에서 "-" 는 음수 직접입력(선행 부호)으로 우선 — 그 외 연산자 키는 입력칸 여부와 무관하게 항상 가로챈다.
-            if (isDisplayInput && event.key === "-") return;
+            // 입력칸에서 "-" 는 계산이 전혀 시작되지 않은 맨 처음(대기 연산자도 없는 상태)에만 음수 부호로 우선한다
+            // (예: AC 직후 "-5" 직접 입력). startFresh 만 보면 연산자를 누른 직후에도 true 라서, 그 상태에서 "-"를
+            // 또 누르면 네이티브 타이핑으로 새다가 startFresh 가 조용히 꺼져 다음 연산자에서 잘못된 체인 계산(예: 5-5=0)
+            // 으로 이어졌었다 — 그래서 대기 중인 연산이 없을 때로 좁혔다. 그 외엔 다른 연산자와 동일하게 뺄셈으로 가로챈다.
+            if (isDisplayInput && event.key === "-" && startFresh && accumulator === null && pendingOp === null) return;
             event.preventDefault();
+            setPressedKey(op);
             handleOperator(op);
             return;
         }
         if (event.key === "Enter" || event.key === "=") {
             event.preventDefault();
+            setPressedKey("=");
             handleEquals();
             return;
         }
         if (event.key === "Escape") {
             event.preventDefault();
+            setPressedKey("C");
             handleAllClear();
         }
     };
 
-    /** 계산기 버튼 공통 스타일(키패드 숫자 버튼과 통일). */
+    /** keydown 에서 켠 눌림 효과를 실제 키를 뗄 때 끈다. */
+    const handleKeyUp = () => setPressedKey(null);
+
+    /** 눌린 키에 대응하는 버튼이면 클릭(:active)과 같은 스타일을 강제 적용한다. */
+    const pressedSx = (key: string): SxProps<Theme> =>
+        pressedKey === key ? { backgroundColor: "action.selected", transform: "scale(0.96)" } : {};
+
+    /** 계산기 버튼 공통 스타일(키패드 숫자 버튼과 통일) — buttonHeight/fontSize prop 으로 크기 조정. */
     const digitButtonSx: SxProps<Theme> = {
         height: "100%",
         minHeight: 0,
         minWidth: 0,
-        fontSize: "2rem",
+        fontSize,
         fontWeight: 700,
         borderRadius: 2,
         transition: "background-color 80ms ease, transform 80ms ease",
         "&:active": { backgroundColor: "action.selected", transform: "scale(0.96)" },
     };
+    /** 연산자 버튼 스타일 — 숫자 버튼과 같은 그리드 칸을 쓰므로 너비는 동일, 기호만 fontSize 의 0.75배로 살짝 작게. */
+    const operatorButtonSx: SxProps<Theme> = {
+        ...digitButtonSx,
+        fontSize: typeof fontSize === "number" ? fontSize * 0.75 : `calc(${fontSize} * 0.75)`,
+    };
+    /** 연산자 4개 — 숫자 키패드 각 행(7·8·9 / 4·5·6 / 1·2·3 / C·0·⌫)과 같은 줄에 하나씩 나란히 놓인다. */
+    const OPERATORS: CalcOperator[] = ["÷", "×", "−", "+"];
 
     return (
-        <Box sx={{ display: "flex", flexDirection: "column", p: 2, gap: 1.5, ...sx }} onKeyDown={handleKeyDown}>
+        <Box
+            sx={{ display: "flex", flexDirection: "column", px, py, gap: 1.5, ...sx }}
+            onKeyDown={handleKeyDown}
+            onKeyUp={handleKeyUp}
+            onBlur={handleKeyUp}
+        >
             {/* 표시부 — 누적식(상단, 작게) + 현재값(직접 입력 가능, 하단, 크게) + 복사 아이콘. */}
             <Box sx={{ px: 1 }}>
                 <Typography sx={{ fontSize: 14, color: "text.secondary", minHeight: 20, textAlign: "right" }}>
@@ -374,60 +430,73 @@ function CalculatorKeypad({
                 </Box>
             </Box>
 
-            {/* 키패드(숫자·C·⌫, 7·8·9 가 위 — 표준 계산기 순서) + 연산자 열(÷ × − +). 자체 콘텐츠 크기로만 렌더. */}
-            <Box sx={{ display: "flex", gap: 1.5 }}>
-                <Box sx={{ flex: 1, display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gridTemplateRows: "repeat(4, 1fr)", gap: 1.5 }}>
-                    {DIGIT_ROWS[digitOrder].flat().map((digit) => (
+            {/* 키패드(숫자·C·⌫, 7·8·9 가 위 — 표준 계산기 순서) + 연산자(÷ × − +) 를 한 그리드에 배치해 버튼 너비를 통일한다.
+                각 행 높이는 buttonHeight prop 으로 조정한다. */}
+            <Box
+                sx={{
+                    display: "grid",
+                    gridTemplateColumns: "repeat(4, 1fr)",
+                    gridTemplateRows: `repeat(4, ${buttonHeight}px)`,
+                    gap: 1.5,
+                }}
+            >
+                {DIGIT_ROWS[digitOrder].map((row, rowIndex) => (
+                    <Fragment key={rowIndex}>
+                        {row.map((digit) => (
+                            <Button
+                                key={digit}
+                                variant="outlined"
+                                onClick={() => handleKeypadChange(appendDigit(startFresh ? 0 : displayNumber, digit, 0, CALCULATOR_MAX))}
+                                sx={{ ...digitButtonSx, ...pressedSx(String(digit)) }}
+                            >
+                                {digit}
+                            </Button>
+                        ))}
                         <Button
-                            key={digit}
                             variant="outlined"
-                            onClick={() => handleKeypadChange(appendDigit(startFresh ? 0 : displayNumber, digit, 0, CALCULATOR_MAX))}
-                            sx={digitButtonSx}
+                            color={pendingOp === OPERATORS[rowIndex] ? "primary" : "inherit"}
+                            onClick={() => handleOperator(OPERATORS[rowIndex])}
+                            sx={{ ...operatorButtonSx, ...pressedSx(OPERATORS[rowIndex]) }}
                         >
-                            {digit}
+                            {OPERATORS[rowIndex]}
                         </Button>
-                    ))}
-                    {/* 마지막 줄: C(전체삭제) · 0 · ⌫(한 자리 지우기) */}
-                    <Button variant="outlined" color="inherit" onClick={handleAllClear} sx={digitButtonSx}>
-                        C
-                    </Button>
-                    <Button
-                        variant="outlined"
-                        onClick={() => handleKeypadChange(appendDigit(startFresh ? 0 : displayNumber, 0, 0, CALCULATOR_MAX))}
-                        sx={digitButtonSx}
-                    >
-                        0
-                    </Button>
-                    <Button
-                        variant="outlined"
-                        color="inherit"
-                        onClick={() => handleKeypadChange(removeLastDigit(startFresh ? 0 : displayNumber, 0, CALCULATOR_MAX))}
-                        sx={digitButtonSx}
-                        aria-label="한 자리 지우기"
-                    >
-                        <BackspaceOutlinedIcon sx={{ fontSize: 32 }} />
-                    </Button>
-                </Box>
-                <Box sx={{ display: "grid", gridTemplateRows: "repeat(4, 1fr)", gap: 1.5, width: 76 }}>
-                    {(["÷", "×", "−", "+"] as CalcOperator[]).map((op) => (
-                        <Button
-                            key={op}
-                            variant="outlined"
-                            color={pendingOp === op ? "primary" : "inherit"}
-                            onClick={() => handleOperator(op)}
-                            sx={{ minWidth: 0, height: "100%", fontSize: "1.5rem", fontWeight: 700, borderRadius: 2 }}
-                        >
-                            {op}
-                        </Button>
-                    ))}
-                </Box>
+                    </Fragment>
+                ))}
+                {/* 마지막 줄: C(전체삭제) · 0 · ⌫(한 자리 지우기) · + */}
+                <Button variant="outlined" color="inherit" onClick={handleAllClear} sx={{ ...digitButtonSx, ...pressedSx("C") }}>
+                    C
+                </Button>
+                <Button
+                    variant="outlined"
+                    onClick={() => handleKeypadChange(appendDigit(startFresh ? 0 : displayNumber, 0, 0, CALCULATOR_MAX))}
+                    sx={{ ...digitButtonSx, ...pressedSx("0") }}
+                >
+                    0
+                </Button>
+                <Button
+                    variant="outlined"
+                    color="inherit"
+                    onClick={() => handleKeypadChange(removeLastDigit(startFresh ? 0 : displayNumber, 0, CALCULATOR_MAX))}
+                    sx={{ ...digitButtonSx, ...pressedSx("backspace") }}
+                    aria-label="한 자리 지우기"
+                >
+                    <BackspaceOutlinedIcon sx={{ fontSize: 32 }} />
+                </Button>
+                <Button
+                    variant="outlined"
+                    color={pendingOp === OPERATORS[3] ? "primary" : "inherit"}
+                    onClick={() => handleOperator(OPERATORS[3])}
+                    sx={{ ...operatorButtonSx, ...pressedSx(OPERATORS[3]) }}
+                >
+                    {OPERATORS[3]}
+                </Button>
             </Box>
 
-            {/* 하단 — 등호(=, 강조). AC 는 키패드 첫 줄로 이동했으므로 여기 별도 버튼은 두지 않는다. */}
+            {/* 하단 — 등호(=, 강조). AC 는 키패드 첫 줄로 이동했으므로 여기 별도 버튼은 두지 않는다. buttonHeight 와 같은 높이로 맞춘다. */}
             <Button
                 variant="contained"
                 onClick={handleEquals}
-                sx={{ height: 56, fontSize: "1.25rem", fontWeight: 700, borderRadius: 2 }}
+                sx={{ height: buttonHeight, fontSize: "1.25rem", fontWeight: 700, borderRadius: 2, ...pressedSx("=") }}
             >
                 =
             </Button>

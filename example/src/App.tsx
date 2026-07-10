@@ -20,10 +20,14 @@ function NumpadDemo() {
     const [max, setMax] = useState(999);
     const [digitOrder, setDigitOrder] = useState<"ascending" | "descending">("ascending");
     const [fillHeight, setFillHeight] = useState(false);
+    const [buttonHeight, setButtonHeight] = useState(76);
+    const [fontSize, setFontSize] = useState(32);
+    const [px, setPx] = useState(0);
+    const [py, setPy] = useState(0);
 
     return (
         <Box sx={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-            <Paper variant="outlined" sx={{ p: 2, width: 280, height: fillHeight ? 420 : "auto" }}>
+            <Paper variant="outlined" sx={{ width: 280, height: fillHeight ? 420 : "auto" }}>
                 <NumberKeypad
                     value={value}
                     onChange={setValue}
@@ -31,6 +35,10 @@ function NumpadDemo() {
                     max={max}
                     digitOrder={digitOrder}
                     fillHeight={fillHeight}
+                    buttonHeight={buttonHeight}
+                    fontSize={fontSize}
+                    px={px}
+                    py={py}
                 />
             </Paper>
 
@@ -63,6 +71,34 @@ function NumpadDemo() {
                     control={<Switch checked={fillHeight} onChange={(e) => setFillHeight(e.target.checked)} />}
                     label="fillHeight"
                 />
+                <TextField
+                    label="buttonHeight (px)"
+                    type="number"
+                    size="small"
+                    value={buttonHeight}
+                    onChange={(e) => setButtonHeight(Number(e.target.value) || 0)}
+                />
+                <TextField
+                    label="fontSize (px)"
+                    type="number"
+                    size="small"
+                    value={fontSize}
+                    onChange={(e) => setFontSize(Number(e.target.value) || 0)}
+                />
+                <TextField
+                    label="px (padding-x, MUI spacing)"
+                    type="number"
+                    size="small"
+                    value={px}
+                    onChange={(e) => setPx(Number(e.target.value) || 0)}
+                />
+                <TextField
+                    label="py (padding-y, MUI spacing)"
+                    type="number"
+                    size="small"
+                    value={py}
+                    onChange={(e) => setPy(Number(e.target.value) || 0)}
+                />
             </Box>
         </Box>
     );
@@ -70,11 +106,22 @@ function NumpadDemo() {
 
 function CalculatorDemo() {
     const [liveInput, setLiveInput] = useState("");
+    const [buttonHeight, setButtonHeight] = useState(76);
+    const [fontSize, setFontSize] = useState(32);
+    const [px, setPx] = useState(2);
+    const [py, setPy] = useState(2);
 
     return (
         <Box sx={{ display: "flex", gap: 4, flexWrap: "wrap" }}>
-            <Paper variant="outlined" sx={{ p: 2, width: 320 }}>
-                <NumberKeypad variant="calculator" liveInput={liveInput} />
+            <Paper variant="outlined" sx={{ width: 320 }}>
+                <NumberKeypad
+                    variant="calculator"
+                    liveInput={liveInput}
+                    buttonHeight={buttonHeight}
+                    fontSize={fontSize}
+                    px={px}
+                    py={py}
+                />
             </Paper>
 
             <Box sx={{ display: "flex", flexDirection: "column", gap: 2, minWidth: 240 }}>
@@ -86,6 +133,34 @@ function CalculatorDemo() {
                     size="small"
                     value={liveInput}
                     onChange={(e) => setLiveInput(e.target.value)}
+                />
+                <TextField
+                    label="buttonHeight (px)"
+                    type="number"
+                    size="small"
+                    value={buttonHeight}
+                    onChange={(e) => setButtonHeight(Number(e.target.value) || 0)}
+                />
+                <TextField
+                    label="fontSize (px)"
+                    type="number"
+                    size="small"
+                    value={fontSize}
+                    onChange={(e) => setFontSize(Number(e.target.value) || 0)}
+                />
+                <TextField
+                    label="px (padding-x, MUI spacing)"
+                    type="number"
+                    size="small"
+                    value={px}
+                    onChange={(e) => setPx(Number(e.target.value) || 0)}
+                />
+                <TextField
+                    label="py (padding-y, MUI spacing)"
+                    type="number"
+                    size="small"
+                    value={py}
+                    onChange={(e) => setPy(Number(e.target.value) || 0)}
                 />
             </Box>
         </Box>

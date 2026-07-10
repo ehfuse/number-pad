@@ -26,6 +26,15 @@ import { NumberKeypad } from "@ehfuse/number-pad";
 <NumberKeypad variant="calculator" liveInput={mirroredText} />;
 ```
 
+### 크기 조정
+
+`buttonHeight`(px)·`fontSize`는 두 variant 모두에 적용된다. `px`/`py`는 컨테이너 좌우/상하 패딩(MUI spacing 단위 — 기본값은 numpad 0, calculator 2).
+
+```tsx
+<NumberKeypad value={qty} onChange={setQty} buttonHeight={60} fontSize={24} px={1} py={1} />;
+<NumberKeypad variant="calculator" buttonHeight={64} fontSize={28} />;
+```
+
 ## Exports
 
 -   `NumberKeypad`, `NumberKeypadProps`
