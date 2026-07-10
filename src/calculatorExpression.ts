@@ -71,12 +71,22 @@ function collapseOperatorRuns(text: string): string {
 }
 
 /**
+ * 맨 앞의 "-"(음수 부호)는 남기고, 그 외 연산자(+×÷*xX/)가 맨 앞에 오면 의미가 없으므로 제거한다.
+ * "5 빼기 3"처럼 뺄셈은 항상 두 번째 숫자 앞에 오지만, 덧셈/곱셈/나눗셈은 첫 숫자보다 앞에 올 수 없다.
+ */
+function stripLeadingNonMinusOperator(text: string): string {
+    return text.replace(/^[+×÷*xX/]+/, "");
+}
+
+/**
  * 식을 타이핑하는 중(계산 확정 전) 허용 문자만 남기고(숫자·콤마·부호·연산자), 연산자를 연달아 눌러도
- * 마지막 것만 남도록 정리한다(예: "11++++123+++++" → "11+123+"). 연산자를 완전히 지우지 않고
- * 그대로 보여줄 때 쓴다 — 외부 입력칸(예: 금액 입력란)의 onChange 에 바로 적용하면 된다.
+ * 마지막 것만 남도록 정리하며(예: "11++++123+++++" → "11+123+"), 맨 앞에 "-" 외의 연산자가 오는 것도
+ * 막는다(예: "+123" → "123"). 연산자를 완전히 지우지 않고 그대로 보여줄 때 쓴다 — 외부 입력칸(예: 금액
+ * 입력란)의 onChange 에 바로 적용하면 된다.
  */
 export function formatExpressionInput(text: string): string {
-    return collapseRuns(text.replace(/[^\d,+\-×÷*xX/]/g, ""), "+\\-×÷*xX/");
+    const collapsed = collapseRuns(text.replace(/[^\d,+\-×÷*xX/]/g, ""), "+\\-×÷*xX/");
+    return stripLeadingNonMinusOperator(collapsed);
 }
 
 /** {@link parseExpressionState} 의 반환값 — 계산기 표시 상태(누적값·대기 연산자·타이핑 중인 피연산자). */
@@ -96,11 +106,12 @@ export interface ExpressionState {
  * NumberKeypad 의 calculator variant 가 liveInput 을 실제로 타이핑한 것과 동일하게 미러링하는 데 쓴다.
  */
 export function parseExpressionState(raw: string): ExpressionState {
-    const collapsed = collapseOperatorRuns(normalizeOperatorChars(raw.replace(/,/g, "").trim()));
+    const collapsed = stripLeadingNonMinusOperator(
+        collapseOperatorRuns(normalizeOperatorChars(raw.replace(/,/g, "").trim()))
+    );
     if (!collapsed) return { accumulator: null, pendingOp: null, currentText: "" };
-    // 연산자 하나만 덜렁 있는 경우 — "-"는 음수 부호로 타이핑 시작한 상태로 보고, 그 외(+×÷)는 무의미하니 비운다.
+    // "-" 하나만 덜렁 있으면 음수 부호로 타이핑 시작한 상태로 본다(그 외 연산자는 stripLeadingNonMinusOperator 가 이미 제거).
     if (collapsed === "-") return { accumulator: null, pendingOp: null, currentText: "-" };
-    if (/^[+×÷]$/.test(collapsed)) return { accumulator: null, pendingOp: null, currentText: "" };
 
     const tokens = collapsed.split(/([+×÷]|(?<!^)-)/).filter((t) => t !== "");
     if (tokens.length === 0) return { accumulator: null, pendingOp: null, currentText: "" };
