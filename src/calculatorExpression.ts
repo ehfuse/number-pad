@@ -84,14 +84,30 @@ function stripLeadingNonMinusOperator(text: string): string {
 }
 
 /**
+ * 각 피연산자(연산자로 안 끊긴 구간) 안에 소수점이 2개 이상이면 첫 번째만 남긴다(예: "1.1.1.1" → "1.1").
+ * "1.5+2.3" 처럼 피연산자마다 하나씩 있는 건 그대로 두고, 같은 숫자 안에서만 중복을 정리한다.
+ */
+function collapseExtraDots(text: string): string {
+    return text
+        .split(/([+\-×÷*xX/])/)
+        .map((part) => {
+            const dotIndex = part.indexOf(".");
+            if (dotIndex === -1) return part; // 점이 없는 조각(연산자 포함)은 그대로.
+            return part.slice(0, dotIndex + 1) + part.slice(dotIndex + 1).replace(/\./g, "");
+        })
+        .join("");
+}
+
+/**
  * 식을 타이핑하는 중(계산 확정 전) 허용 문자만 남기고(숫자·콤마·소수점·부호·연산자), 연산자를 연달아 눌러도
- * 마지막 것만 남도록 정리하며(예: "11++++123+++++" → "11+123+"), 맨 앞에 "-" 외의 연산자가 오는 것도
- * 막는다(예: "+123" → "123"). 연산자를 완전히 지우지 않고 그대로 보여줄 때 쓴다 — 외부 입력칸(예: 금액
- * 입력란)의 onChange 에 바로 적용하면 된다.
+ * 마지막 것만 남도록 정리하며(예: "11++++123+++++" → "11+123+"), 한 피연산자 안에서 소수점이 여러 번
+ * 찍혀도 첫 번째만 남기고(예: "1.1.1.1" → "1.1"), 맨 앞에 "-" 외의 연산자가 오는 것도 막는다(예: "+123" →
+ * "123"). 연산자를 완전히 지우지 않고 그대로 보여줄 때 쓴다 — 외부 입력칸(예: 금액 입력란)의 onChange 에
+ * 바로 적용하면 된다.
  */
 export function formatExpressionInput(text: string): string {
     const collapsed = collapseRuns(text.replace(/[^\d,.+\-×÷*xX/]/g, ""), "+\\-×÷*xX/");
-    return stripLeadingNonMinusOperator(collapsed);
+    return stripLeadingNonMinusOperator(collapseExtraDots(collapsed));
 }
 
 /** {@link parseExpressionState} 의 반환값 — 계산기 표시 상태(누적값·대기 연산자·타이핑 중인 피연산자). */
@@ -112,7 +128,7 @@ export interface ExpressionState {
  */
 export function parseExpressionState(raw: string): ExpressionState {
     const collapsed = stripLeadingNonMinusOperator(
-        collapseOperatorRuns(normalizeOperatorChars(raw.replace(/,/g, "").trim()))
+        collapseExtraDots(collapseOperatorRuns(normalizeOperatorChars(raw.replace(/,/g, "").trim())))
     );
     if (!collapsed) return { accumulator: null, pendingOp: null, currentText: "" };
     // "-" 하나만 덜렁 있으면 음수 부호로 타이핑 시작한 상태로 본다(그 외 연산자는 stripLeadingNonMinusOperator 가 이미 제거).

@@ -592,7 +592,7 @@ function CalculatorKeypad({
                     sx={{ ...digitButtonSx, ...pressedSx("+/-") }}
                     aria-label="부호 반전"
                 >
-                    +/−
+                    ±
                 </Button>
                 <Button variant="outlined" onClick={() => handleCalcDigit(0)} sx={{ ...digitButtonSx, ...pressedSx("0") }}>
                     0
