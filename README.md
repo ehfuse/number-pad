@@ -26,8 +26,9 @@ import { NumberKeypad } from "@ehfuse/number-pad";
 <NumberKeypad variant="calculator" liveInput={mirroredText} />;
 ```
 
-윈도우 계산기와 동일하게 소수점(`.`)·부호 반전(`+/-`)을 지원한다(소수부 최대 8자리). `C`/`⌫`는 숫자 키패드
-밖(표시부 옆)에 있다 — 물리 키보드에서도 숫자·`.`·Backspace·연산자·Enter(=)·Escape(AC)가 모두 동작한다.
+소수점(`.`)을 지원한다(소수부 최대 8자리). 버튼은 물리 키보드 넘패드와 비슷하게 배치되며(`+`·`=`는 오른쪽에
+세로로 길게, `C`·`⌫`·`.`은 키패드 안에), 물리 키보드에서도 숫자·`.`·Backspace·연산자·Enter(=)·Escape(전체삭제)가
+모두 동작한다. 음수는 값 맨 앞에 `-`를 입력해 만든다.
 
 ### liveInput — 외부 입력칸과 연동
 
