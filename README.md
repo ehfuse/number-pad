@@ -18,6 +18,18 @@ import { NumberKeypad } from "@ehfuse/number-pad";
 <NumberKeypad value={qty} onChange={setQty} min={0} max={999} />;
 ```
 
+### pin (문자열 PIN — 간편비밀번호)
+
+앞자리 0 을 보존하는 고정 자리수 문자열 입력. 자리수 표시(●○ 도트 등)는 소비 측에서 `pin` 값으로 그린다.
+
+```tsx
+import { NumberKeypad } from "@ehfuse/number-pad";
+
+const [pin, setPin] = useState("");
+
+<NumberKeypad variant="pin" pin={pin} onPinChange={setPin} pinMaxLength={6} />;
+```
+
 ### calculator (사칙연산 포함 독립 계산기)
 
 ```tsx

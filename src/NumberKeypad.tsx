@@ -33,10 +33,13 @@ const DIGIT_ROWS: Record<"ascending" | "descending", number[][]> = {
     ],
 };
 
-/** 공용 props. variant="numpad"(기본, controlled value/onChange) | "calculator"(사칙연산 포함, 내부 상태 자체 관리). */
+/**
+ * 공용 props. variant="numpad"(기본, controlled value/onChange) | "calculator"(사칙연산 포함, 내부 상태 자체 관리)
+ * | "pin"(문자열 PIN 입력 — 앞자리 0 보존, pin/onPinChange 사용).
+ */
 export interface NumberKeypadProps {
     /** 동작 모드. 기본 "numpad" — 숫자만 입력받는 컨트롤드 위젯. */
-    variant?: "numpad" | "calculator";
+    variant?: "numpad" | "calculator" | "pin";
     /** 숫자 행 순서. 기본 "ascending"(1·2·3 이 위). "descending"(7·8·9 이 위)은 계산기가 사용. */
     digitOrder?: "ascending" | "descending";
     /** numpad: 현재 숫자 값(필수). calculator 모드에서는 쓰지 않는다. */
@@ -64,6 +67,12 @@ export interface NumberKeypadProps {
      * 값이 바뀔 때마다 표시부를 그 텍스트로 덮어쓰고 진행 중이던 연산(누적값/연산자)은 초기화한다.
      */
     liveInput?: string;
+    /** pin 전용 — 현재 PIN 문자열("012345" 처럼 앞자리 0 을 보존한다). */
+    pin?: string;
+    /** pin 전용 — PIN 이 바뀔 때 호출(최대 자리수 초과 입력은 무시된 결과). */
+    onPinChange?: (next: string) => void;
+    /** pin 전용 — 최대 자리수(기본 6). 이 길이를 넘는 숫자 입력은 무시한다. */
+    pinMaxLength?: number;
 }
 
 /** 숫자 자리수를 입력값 뒤에 붙인다(클램프). */
@@ -158,7 +167,8 @@ function removeCalcLastChar(raw: string, startFresh: boolean): string {
 
 /**
  * 숫자(0~9)·지우기(⌫)·전체삭제(C) 버튼으로 구성된 공용 숫자 키패드 — variant="numpad"(기본, 정수 전용)
- * | "calculator"(사칙연산·소수점·부호 반전 + 표시부 + 물리 키보드까지 갖춘 독립 계산기).
+ * | "calculator"(사칙연산·소수점·부호 반전 + 표시부 + 물리 키보드까지 갖춘 독립 계산기)
+ * | "pin"(문자열 PIN — 간편비밀번호처럼 앞자리 0 을 보존하는 고정 자리수 입력).
  */
 export function NumberKeypad({
     variant = "numpad",
@@ -174,6 +184,9 @@ export function NumberKeypad({
     liveInput,
     px,
     py,
+    pin = "",
+    onPinChange,
+    pinMaxLength = 6,
 }: NumberKeypadProps) {
     if (variant === "calculator") {
         return (
@@ -189,6 +202,35 @@ export function NumberKeypad({
         );
     }
     const order = digitOrder ?? "ascending";
+    const isPin = variant === "pin";
+
+    /** 숫자 버튼 클릭 — pin 은 문자열 이어붙이기(자리수 상한), numpad 는 정수 클램프. */
+    const handleDigit = (digit: number) => {
+        if (isPin) {
+            if (pin.length >= pinMaxLength) return;
+            onPinChange?.(pin + String(digit));
+            return;
+        }
+        onChange?.(appendDigit(value, digit, min, max));
+    };
+
+    /** C(전체삭제) 클릭. */
+    const handleClear = () => {
+        if (isPin) {
+            onPinChange?.("");
+            return;
+        }
+        onChange?.(clampValue(0, min, max));
+    };
+
+    /** ⌫(한 자리 지우기) 클릭. */
+    const handleBackspace = () => {
+        if (isPin) {
+            onPinChange?.(pin.slice(0, -1));
+            return;
+        }
+        onChange?.(removeLastDigit(value, min, max));
+    };
 
     /** 키패드 버튼 공통 스타일. fillHeight 면 행 높이를 가득 채운다. */
     const buttonSx: SxProps<Theme> = {
@@ -219,31 +261,21 @@ export function NumberKeypad({
             }}
         >
             {DIGIT_ROWS[order].flat().map((digit) => (
-                <Button
-                    key={digit}
-                    variant="outlined"
-                    onClick={() => onChange?.(appendDigit(value, digit, min, max))}
-                    sx={buttonSx}
-                >
+                <Button key={digit} variant="outlined" onClick={() => handleDigit(digit)} sx={buttonSx}>
                     {digit}
                 </Button>
             ))}
             {/* 마지막 줄: C(전체삭제) · 0 · ⌫(한 자리 지우기) */}
-            <Button
-                variant="outlined"
-                color="inherit"
-                onClick={() => onChange?.(clampValue(0, min, max))}
-                sx={buttonSx}
-            >
+            <Button variant="outlined" color="inherit" onClick={handleClear} sx={buttonSx}>
                 C
             </Button>
-            <Button variant="outlined" onClick={() => onChange?.(appendDigit(value, 0, min, max))} sx={buttonSx}>
+            <Button variant="outlined" onClick={() => handleDigit(0)} sx={buttonSx}>
                 0
             </Button>
             <Button
                 variant="outlined"
                 color="inherit"
-                onClick={() => onChange?.(removeLastDigit(value, min, max))}
+                onClick={handleBackspace}
                 sx={buttonSx}
                 aria-label="한 자리 지우기"
             >
