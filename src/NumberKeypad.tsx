@@ -73,6 +73,21 @@ export interface NumberKeypadProps {
     onPinChange?: (next: string) => void;
     /** pin 전용 — 최대 자리수(기본 6). 이 길이를 넘는 숫자 입력은 무시한다. */
     pinMaxLength?: number;
+    /**
+     * numpad/pin 전용 — true 면 숫자(0~9) 버튼 위치를 마운트 시 무작위로 섞는다
+     * (간편비밀번호 보안 키패드용). 0 도 섞여서 마지막 줄 가운데 칸에 임의 숫자가 온다.
+     */
+    shuffle?: boolean;
+}
+
+/** 0~9 를 Fisher-Yates 로 섞은 배열을 돌려준다(shuffle prop 용). */
+function shuffledDigitArray(): number[] {
+    const digits = [1, 2, 3, 4, 5, 6, 7, 8, 9, 0];
+    for (let i = digits.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [digits[i], digits[j]] = [digits[j], digits[i]];
+    }
+    return digits;
 }
 
 /** 숫자 자리수를 입력값 뒤에 붙인다(클램프). */
@@ -187,6 +202,7 @@ export function NumberKeypad({
     pin = "",
     onPinChange,
     pinMaxLength = 6,
+    shuffle = false,
 }: NumberKeypadProps) {
     if (variant === "calculator") {
         return (
@@ -203,6 +219,11 @@ export function NumberKeypad({
     }
     const order = digitOrder ?? "ascending";
     const isPin = variant === "pin";
+
+    // shuffle 이면 마운트 시 한 번 섞은 배치를 유지한다(입력 중 재배치 방지).
+    const [shuffledDigits] = useState<number[] | null>(() => (shuffle ? shuffledDigitArray() : null));
+    const gridDigits = shuffledDigits ? shuffledDigits.slice(0, 9) : DIGIT_ROWS[order].flat();
+    const bottomDigit = shuffledDigits ? shuffledDigits[9] : 0;
 
     /** 숫자 버튼 클릭 — pin 은 문자열 이어붙이기(자리수 상한), numpad 는 정수 클램프. */
     const handleDigit = (digit: number) => {
@@ -260,17 +281,17 @@ export function NumberKeypad({
                 ...sx,
             }}
         >
-            {DIGIT_ROWS[order].flat().map((digit) => (
+            {gridDigits.map((digit) => (
                 <Button key={digit} variant="outlined" onClick={() => handleDigit(digit)} sx={buttonSx}>
                     {digit}
                 </Button>
             ))}
-            {/* 마지막 줄: C(전체삭제) · 0 · ⌫(한 자리 지우기) */}
+            {/* 마지막 줄: C(전체삭제) · 0(shuffle 시 임의 숫자) · ⌫(한 자리 지우기) */}
             <Button variant="outlined" color="inherit" onClick={handleClear} sx={buttonSx}>
                 C
             </Button>
-            <Button variant="outlined" onClick={() => handleDigit(0)} sx={buttonSx}>
-                0
+            <Button variant="outlined" onClick={() => handleDigit(bottomDigit)} sx={buttonSx}>
+                {bottomDigit}
             </Button>
             <Button
                 variant="outlined"

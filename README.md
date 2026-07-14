@@ -30,6 +30,12 @@ const [pin, setPin] = useState("");
 <NumberKeypad variant="pin" pin={pin} onPinChange={setPin} pinMaxLength={6} />;
 ```
 
+`shuffle` 을 주면 숫자 버튼 위치를 마운트 시 무작위로 섞는다(보안 키패드). numpad/pin 두 variant 에 적용된다.
+
+```tsx
+<NumberKeypad variant="pin" pin={pin} onPinChange={setPin} shuffle />;
+```
+
 ### calculator (사칙연산 포함 독립 계산기)
 
 ```tsx
