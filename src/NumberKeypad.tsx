@@ -78,6 +78,12 @@ export interface NumberKeypadProps {
      * (간편비밀번호 보안 키패드용). 0 도 섞여서 마지막 줄 가운데 칸에 임의 숫자가 온다.
      */
     shuffle?: boolean;
+    /**
+     * numpad/pin 전용 — true 면 click(손을 뗄 때) 대신 pointerdown(누르는 순간)에 입력한다.
+     * 반응이 빨라지지만, 키패드가 스크롤 영역 안에 있으면 스크롤 시작 터치가 입력될 수 있으니
+     * 고정 화면(간편비밀번호 등)에서만 켤 것. 기본 false.
+     */
+    inputOnPointerDown?: boolean;
 }
 
 /** 0~9 를 Fisher-Yates 로 섞은 배열을 돌려준다(shuffle prop 용). */
@@ -203,6 +209,7 @@ export function NumberKeypad({
     onPinChange,
     pinMaxLength = 6,
     shuffle = false,
+    inputOnPointerDown = false,
 }: NumberKeypadProps) {
     if (variant === "calculator") {
         return (
@@ -269,6 +276,21 @@ export function NumberKeypad({
         },
     };
 
+    /**
+     * 입력 트리거 핸들러 — inputOnPointerDown 이면 pointerdown(누르는 순간)에 실행하고,
+     * 이어지는 click 은 무시해 이중 입력을 막는다. 기본은 click(손을 뗄 때).
+     */
+    const pressProps = (action: () => void) =>
+        inputOnPointerDown
+            ? {
+                  onPointerDown: (e: React.PointerEvent) => {
+                      // 버튼 포커스 이동(입력칸 blur 등) 부작용 없이 즉시 입력만 반영한다.
+                      e.preventDefault();
+                      action();
+                  },
+              }
+            : { onClick: action };
+
     return (
         <Box
             sx={{
@@ -282,21 +304,21 @@ export function NumberKeypad({
             }}
         >
             {gridDigits.map((digit) => (
-                <Button key={digit} variant="outlined" onClick={() => handleDigit(digit)} sx={buttonSx}>
+                <Button key={digit} variant="outlined" {...pressProps(() => handleDigit(digit))} sx={buttonSx}>
                     {digit}
                 </Button>
             ))}
             {/* 마지막 줄: C(전체삭제) · 0(shuffle 시 임의 숫자) · ⌫(한 자리 지우기) */}
-            <Button variant="outlined" color="inherit" onClick={handleClear} sx={buttonSx}>
+            <Button variant="outlined" color="inherit" {...pressProps(handleClear)} sx={buttonSx}>
                 C
             </Button>
-            <Button variant="outlined" onClick={() => handleDigit(bottomDigit)} sx={buttonSx}>
+            <Button variant="outlined" {...pressProps(() => handleDigit(bottomDigit))} sx={buttonSx}>
                 {bottomDigit}
             </Button>
             <Button
                 variant="outlined"
                 color="inherit"
-                onClick={handleBackspace}
+                {...pressProps(handleBackspace)}
                 sx={buttonSx}
                 aria-label="한 자리 지우기"
             >
