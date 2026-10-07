@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { Box, Button, IconButton, Tooltip, Typography, type SxProps, type Theme } from "@mui/material";
 import BackspaceOutlinedIcon from "@mui/icons-material/BackspaceOutlined";
 import ContentCopyIcon from "@mui/icons-material/ContentCopy";
@@ -84,6 +84,11 @@ export interface NumberKeypadProps {
      * 고정 화면(간편비밀번호 등)에서만 켤 것. 기본 false.
      */
     inputOnPointerDown?: boolean;
+    /**
+     * numpad 전용 — true 면 마지막 줄 왼쪽 키가 **전체삭제(C) 대신 소수점(.)** 이 된다.
+     * 키·몸무게처럼 소수가 필요한 자리에 쓴다. 전체삭제는 ⌫ 를 여러 번 눌러 대신한다.
+     */
+    decimal?: boolean;
 }
 
 /** 0~9 를 Fisher-Yates 로 섞은 배열을 돌려준다(shuffle prop 용). */
@@ -115,6 +120,44 @@ function clampValue(value: number, min: number, max: number): number {
     const truncated = Math.trunc(Number(value) || 0);
     const lowerBounded = Math.max(min, truncated);
     return Number.isFinite(max) ? Math.min(max, lowerBounded) : lowerBounded;
+}
+
+/** 소수부 최대 자리수(numpad 전용) — 키·몸무게처럼 한두 자리면 충분하다. */
+const NUMPAD_MAX_DECIMALS = 2;
+
+/**
+ * 입력 중 텍스트에 숫자를 붙인다 — 소수점이 있으면 소수부 자리수를 제한한다.
+ * ⚠️ 숫자로만 들고 있으면 "170." 이나 끝자리 0("170.0")을 표현할 수 없어, 입력 중에는 텍스트로 든다.
+ */
+function appendDigitText(text: string, digit: number, max: number): string {
+    const dot = text.indexOf(".");
+    if (dot >= 0 && text.length - dot - 1 >= NUMPAD_MAX_DECIMALS) return text;
+    // 앞자리 0 은 의미가 없다 — "0" 뒤에 숫자를 누르면 그 숫자로 바꾼다("0.5" 처럼 점이 있으면 유지).
+    const base = text === "0" ? "" : text;
+    const next = base + String(digit);
+    const parsed = Number(next);
+    if (Number.isFinite(max) && Number.isFinite(parsed) && parsed > max) return text;
+    return next;
+}
+
+/** 입력 중 텍스트에 소수점을 붙인다 — 이미 있으면 무시한다. */
+function appendDotText(text: string): string {
+    if (text.includes(".")) return text;
+    return (text === "" ? "0" : text) + ".";
+}
+
+/** 입력 중 텍스트에서 마지막 한 글자를 지운다(소수점 포함). */
+function removeLastText(text: string): string {
+    const next = text.slice(0, -1);
+    return next === "" || next === "-" ? "" : next;
+}
+
+/** 입력 중 텍스트를 숫자로 — 빈 값이나 "170." 같은 중간 상태는 정수부로 읽는다. */
+function textToValue(text: string, min: number, max: number): number {
+    const parsed = Number(text === "" || text === "." ? 0 : text);
+    const safe = Number.isFinite(parsed) ? parsed : 0;
+    const lower = Math.max(min, safe);
+    return Number.isFinite(max) ? Math.min(max, lower) : lower;
 }
 
 /** 소수부 최대 자리수(계산기 전용) — 그 이상은 더 입력해도 무시한다. */
@@ -210,6 +253,7 @@ export function NumberKeypad({
     pinMaxLength = 6,
     shuffle = false,
     inputOnPointerDown = false,
+    decimal = false,
 }: NumberKeypadProps) {
     if (variant === "calculator") {
         return (
@@ -229,6 +273,18 @@ export function NumberKeypad({
 
     // shuffle 이면 마운트 시 한 번 섞은 배치를 유지한다(입력 중 재배치 방지).
     const [shuffledDigits] = useState<number[] | null>(() => (shuffle ? shuffledDigitArray() : null));
+
+    /*
+     * 소수 입력 중인 텍스트 — `decimal` 일 때만 쓴다.
+     * ⚠️ 숫자만으로는 "170." 이나 끝자리 0 을 표현할 수 없어, 입력하는 동안은 텍스트로 든다.
+     * 밖에서 `value` 가 바뀌면(스테퍼 등) 그 값으로 다시 맞춘다.
+     */
+    const [draft, setDraft] = useState<string>(() => String(value ?? 0));
+    const lastValueRef = useRef<number>(value ?? 0);
+    if (lastValueRef.current !== (value ?? 0) && Number(draft) !== (value ?? 0)) {
+        lastValueRef.current = value ?? 0;
+        setDraft(String(value ?? 0));
+    }
     const gridDigits = shuffledDigits ? shuffledDigits.slice(0, 9) : DIGIT_ROWS[order].flat();
     const bottomDigit = shuffledDigits ? shuffledDigits[9] : 0;
 
@@ -239,7 +295,23 @@ export function NumberKeypad({
             onPinChange?.(pin + String(digit));
             return;
         }
+        if (decimal) {
+            const nextText = appendDigitText(draft, digit, max);
+            setDraft(nextText);
+            const nextValue = textToValue(nextText, min, max);
+            lastValueRef.current = nextValue;
+            onChange?.(nextValue);
+            return;
+        }
         onChange?.(appendDigit(value, digit, min, max));
+    };
+
+    /** .(소수점) 클릭 — `decimal` 일 때 C 자리에 선다. */
+    const handleDot = () => {
+        const nextText = appendDotText(draft);
+        setDraft(nextText);
+        // "170." 은 아직 170 이다 — 값은 그대로 두고 표시만 점을 물고 있는다.
+        onChange?.(textToValue(nextText, min, max));
     };
 
     /** C(전체삭제) 클릭. */
@@ -255,6 +327,14 @@ export function NumberKeypad({
     const handleBackspace = () => {
         if (isPin) {
             onPinChange?.(pin.slice(0, -1));
+            return;
+        }
+        if (decimal) {
+            const nextText = removeLastText(draft);
+            setDraft(nextText);
+            const nextValue = textToValue(nextText, min, max);
+            lastValueRef.current = nextValue;
+            onChange?.(nextValue);
             return;
         }
         onChange?.(removeLastDigit(value, min, max));
@@ -308,10 +388,16 @@ export function NumberKeypad({
                     {digit}
                 </Button>
             ))}
-            {/* 마지막 줄: C(전체삭제) · 0(shuffle 시 임의 숫자) · ⌫(한 자리 지우기) */}
-            <Button variant="outlined" color="inherit" {...pressProps(handleClear)} sx={buttonSx}>
-                C
-            </Button>
+            {/* 마지막 줄: C(전체삭제) 또는 .(소수점, `decimal`) · 0 · ⌫(한 자리 지우기) */}
+            {decimal ? (
+                <Button variant="outlined" {...pressProps(handleDot)} sx={buttonSx} aria-label="소수점">
+                    .
+                </Button>
+            ) : (
+                <Button variant="outlined" color="inherit" {...pressProps(handleClear)} sx={buttonSx}>
+                    C
+                </Button>
+            )}
             <Button variant="outlined" {...pressProps(() => handleDigit(bottomDigit))} sx={buttonSx}>
                 {bottomDigit}
             </Button>
