@@ -89,6 +89,15 @@ export interface NumberKeypadProps {
      * 키·몸무게처럼 소수가 필요한 자리에 쓴다. 전체삭제는 ⌫ 를 여러 번 눌러 대신한다.
      */
     decimal?: boolean;
+    /** numpad 전용 — 글자가 없는 키의 화면 읽기용 이름(기본: 한국어). 다른 언어 화면에서 넘긴다. */
+    labels?: NumberKeypadLabels;
+}
+
+/** numpad 키의 화면 읽기용 이름 */
+export interface NumberKeypadLabels {
+    decimal?: string; // 소수점 키 (기본: "소수점")
+    backspace?: string; // ⌫ 키 (기본: "한 자리 지우기")
+    clear?: string; // C 키 (기본: "전체 삭제")
 }
 
 /** 0~9 를 Fisher-Yates 로 섞은 배열을 돌려준다(shuffle prop 용). */
@@ -254,6 +263,7 @@ export function NumberKeypad({
     shuffle = false,
     inputOnPointerDown = false,
     decimal = false,
+    labels,
 }: NumberKeypadProps) {
     if (variant === "calculator") {
         return (
@@ -390,11 +400,11 @@ export function NumberKeypad({
             ))}
             {/* 마지막 줄: C(전체삭제) 또는 .(소수점, `decimal`) · 0 · ⌫(한 자리 지우기) */}
             {decimal ? (
-                <Button variant="outlined" {...pressProps(handleDot)} sx={buttonSx} aria-label="소수점">
+                <Button variant="outlined" {...pressProps(handleDot)} sx={buttonSx} aria-label={labels?.decimal ?? "소수점"}>
                     .
                 </Button>
             ) : (
-                <Button variant="outlined" color="inherit" {...pressProps(handleClear)} sx={buttonSx}>
+                <Button variant="outlined" color="inherit" {...pressProps(handleClear)} sx={buttonSx} aria-label={labels?.clear ?? "전체 삭제"}>
                     C
                 </Button>
             )}
@@ -406,7 +416,7 @@ export function NumberKeypad({
                 color="inherit"
                 {...pressProps(handleBackspace)}
                 sx={buttonSx}
-                aria-label="한 자리 지우기"
+                aria-label={labels?.backspace ?? "한 자리 지우기"}
             >
                 <BackspaceOutlinedIcon sx={{ fontSize: 36 }} />
             </Button>
